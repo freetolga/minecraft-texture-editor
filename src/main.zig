@@ -2,6 +2,7 @@ const std = @import("std");
 const sdl2 = @cImport({
     @cInclude("SDL2/SDL.h");
 });
+const colors = @import("colors.zig");
 const sdl_error = error{
     SDLInitError,
     SDLWindowCreateError,
@@ -21,6 +22,17 @@ const Cube = struct {
     rect: sdl2.SDL_Rect,
     color: sdl2.SDL_Color,
 };
+
+// the 9 color slots
+var color1 = colors.color1;
+var color2 = colors.color2;
+var color3 = colors.color3;
+var color4 = colors.color4;
+var color5 = colors.color5;
+var color6 = colors.color6;
+var color7 = colors.color7;
+var color8 = colors.color8;
+var color9 = colors.color9;
 
 pub fn main() !void {
     var SCALING_FACTOR: c_int = 10;
@@ -68,60 +80,7 @@ pub fn main() !void {
     var x: i32 = 0;
     var y: i32 = 0;
     var color: sdl2.SDL_Color = BACKGROUND_COLOR;
-    const color1 = sdl2.SDL_Color{
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    };
-    const color2 = sdl2.SDL_Color{
-        .r = 255,
-        .g = 127,
-        .b = 0,
-        .a = 255,
-    };
-    const color3 = sdl2.SDL_Color{
-        .r = 255,
-        .g = 255,
-        .b = 0,
-        .a = 255,
-    };
-    const color4 = sdl2.SDL_Color{
-        .r = 0,
-        .g = 255,
-        .b = 0,
-        .a = 255,
-    };
-    const color5 = sdl2.SDL_Color{
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .a = 255,
-    };
-    const color6 = sdl2.SDL_Color{
-        .r = 255,
-        .g = 0,
-        .b = 255,
-        .a = 255,
-    };
-    const color7 = sdl2.SDL_Color{
-        .r = 0,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    };
-    const color8 = sdl2.SDL_Color{
-        .r = 0,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    };
-    const color9 = sdl2.SDL_Color{
-        .r = 0,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    };
+
     while (!quit) {
         while (sdl2.SDL_PollEvent(&event) != 0) {
             switch (event.type) {
