@@ -1,14 +1,19 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_init.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 #include <print>
 
 class Scene {
   public:
+  
   SDL_Color background_color;
   SDL_Window * window;
   SDL_Renderer * renderer;
+  bool init_sdl() {
+    return SDL_InitSubSystem(SDL_INIT_VIDEO);
+  }
   bool init_scene(const char * title, int width, int height, SDL_WindowFlags window_flags) {
     return SDL_CreateWindowAndRenderer(title, width, height, window_flags, &window, &renderer);
   } 
@@ -27,6 +32,11 @@ class Scene {
   bool present(void) {
     return SDL_RenderPresent(renderer);
   }
+  ~Scene() {
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+  }
 };
 
 class rect_demo {
@@ -42,13 +52,11 @@ class rect_demo {
 };
 
 int main(void) {
-  // initialize
-  if (!SDL_Init(SDL_INIT_VIDEO)) {
-    std::printf("%s\n", SDL_GetError());
+  Scene myScene;
+  if(!myScene.init_sdl()) {
+    std::printf("%s\n",SDL_GetError());
     return -1;
   }
-  // create window and renderer
-  Scene myScene;
   myScene.init_scene("Minecraft Texture Editor",256,256,SDL_WINDOW_RESIZABLE);
   myScene.change_scene_color(0,0,0,0);
   myScene.apply_color();
