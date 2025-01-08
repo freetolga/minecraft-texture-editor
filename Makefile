@@ -1,6 +1,7 @@
 #SDL2 = $(shell sdl2-config --cflags --libs)
 SDL3 = $(shell pkg-config --cflags --libs sdl3)
-CXXFLAGS := -march=native -Wall -Wextra -pedantic -Werror -Werror=implicit-fallthrough -std=c++23 -fno-exceptions -fcolor-diagnostics
+SFML3 = $(shell pkg-config --cflags --libs /usr/local/lib64/pkgconfig/sfml-all.pc)
+CXXFLAGS := -march=native -Wall -Wextra -pedantic -Werror -Werror=implicit-fallthrough -std=c++26 -fno-exceptions -fcolor-diagnostics
 build:
 	clang++ src/main.cc -O3 $(CXXFLAGS) -o out/main $(SDL3)
 build_debug:
@@ -9,3 +10,5 @@ run:
 	out/main
 debug:
 	gdb out/main
+sfml:
+	clang++ src/main2.cc -O3 $(CXXFLAGS) -o out/main2 $(SFML3)

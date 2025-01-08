@@ -5,6 +5,21 @@
 #include <SDL3/SDL_video.h>
 #include <print>
 
+#ifndef defer
+struct defer_dummy {};
+template <class F> struct deferrer { F f; ~deferrer() { f(); } };
+template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
+#define DEFER_(LINE) zz_defer##LINE
+#define DEFER(LINE) DEFER_(LINE)
+#define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
+#endif // defer
+
+namespace mte {
+  int error_print(const char * error) {
+    std::printf("Error: %s\n",error);
+    return -1;
+  }
+}
 class Scene {
   public:
   
@@ -54,10 +69,16 @@ class rect_demo {
 int main(void) {
   Scene myScene;
   if(!myScene.init_sdl()) {
-    std::printf("%s\n",SDL_GetError());
-    return -1;
+    return mte::error_print(SDL_GetError());
   }
-  myScene.init_scene("Minecraft Texture Editor",256,256,SDL_WINDOW_RESIZABLE);
+
+  defer {
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+  };
+
+  if(!myScene.init_scene("Minecraft Texture Editor",256,256,SDL_WINDOW_RESIZABLE)) {
+    return mte::error_print(SDL_GetError());
+  }
   myScene.change_scene_color(0,0,0,0);
   myScene.apply_color();
 
@@ -101,16 +122,14 @@ int main(void) {
     }
     // empty the back buffer
     if(!myScene.clear_scene()) {
-      std::printf("%s\n",SDL_GetError());
-      return -1;
+      return mte::error_print(SDL_GetError());
     }
     // fill the back buffer
-    if(!myrect.draw_myself(myScene.renderer)) std::printf("%s\n",SDL_GetError());
+    if(!myrect.draw_myself(myScene.renderer)) return mte::error_print(SDL_GetError());
     SDL_Delay(4);
     // display the back buffer
     if(!myScene.present()) {
-      std::printf("%s\n",SDL_GetError());
-      return -1;
+      return mte::error_print(SDL_GetError());
     }
   }
   // cleanup
