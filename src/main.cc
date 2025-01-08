@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_init.h>
+#include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 #include <print>
@@ -15,7 +16,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #endif // defer
 
 namespace mte {
-  int error_print(const char * error) {
+  auto error_print(const char * error) -> int {
     std::printf("Error: %s\n",error);
     return -1;
   }
@@ -26,10 +27,10 @@ class Scene {
   SDL_Color background_color;
   SDL_Window * window;
   SDL_Renderer * renderer;
-  bool init_sdl() {
+  auto init_sdl() -> bool {
     return SDL_InitSubSystem(SDL_INIT_VIDEO);
   }
-  bool init_scene(const char * title, int width, int height, SDL_WindowFlags window_flags) {
+  auto init_scene(const char * title, int width, int height, SDL_WindowFlags window_flags) -> bool{
     return SDL_CreateWindowAndRenderer(title, width, height, window_flags, &window, &renderer);
   } 
   void change_scene_color(int r, int g, int b, int a) {
@@ -38,18 +39,21 @@ class Scene {
     background_color.b = b;
     background_color.a = a;
   }
-  bool apply_color(void) {
+  auto apply_color(void) -> bool {
     return SDL_SetRenderDrawColor(renderer, background_color.r, background_color.g, background_color.b, background_color.a);
   }
-  bool clear_scene(void) {
+  auto clear_scene(void) -> bool {
     return SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0) && SDL_RenderClear(renderer);
   }
-  bool present(void) {
+  auto present(void) -> bool {
     return SDL_RenderPresent(renderer);
   }
-  ~Scene() {
+  void destroy_scene(void) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+  }
+  void deinit_sdl(void) {
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
   }
 };
 
@@ -57,45 +61,54 @@ class rect_demo {
   public:
   SDL_FRect rect;
   SDL_Color color;
-  bool set_my_color(SDL_Renderer* renderer) {
+  auto set_my_color(SDL_Renderer* renderer) -> bool {
     return SDL_SetRenderDrawColor(renderer,color.r,color.g,color.b,color.a);
   }
-  bool draw_myself(SDL_Renderer * renderer) {
+  auto draw_myself(SDL_Renderer * renderer) -> bool {
     return set_my_color(renderer) && SDL_RenderFillRect(renderer, &rect);
   }
 };
 
-int main(int argc, char ** argv) {
+auto main(int argc, char ** argv) -> int {
   if(argc < 2) {
     std::printf("Usage: %s <Load Path> <Save Path>\n",argv[0]);
     return -1;
   }
-  Scene myScene;
+  Scene myScene{};
   if(!myScene.init_sdl()) {
     return mte::error_print(SDL_GetError());
   }
 
   defer {
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    myScene.deinit_sdl();
   };
 
   if(!myScene.init_scene("Minecraft Texture Editor",256,256,SDL_WINDOW_RESIZABLE)) {
     return mte::error_print(SDL_GetError());
   }
+
+  defer {
+    myScene.destroy_scene();
+  };
+
   myScene.change_scene_color(0,0,0,0);
   myScene.apply_color();
 
 
-  rect_demo myrect;
-  myrect.rect.w = 10;
-  myrect.rect.h = 10;
-  myrect.rect.x = 10;
-  myrect.rect.y = 10;
-
-  myrect.color.r = 0;
-  myrect.color.g = 0;
-  myrect.color.b = 255;
-  myrect.color.a = 0;
+  rect_demo myrect = {
+    .rect = {
+      .x = 10,
+      .y = 10,
+      .w = 10,
+      .h = 10,
+    } ,
+    .color = {
+      .r = 0,
+      .g = 0,
+      .b = 255,
+      .a = 0,
+    }
+  };
   // game loop
   bool running = true;
   while (running) {
