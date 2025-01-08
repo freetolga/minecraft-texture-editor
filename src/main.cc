@@ -65,7 +65,11 @@ class rect_demo {
   }
 };
 
-int main(void) {
+int main(int argc, char ** argv) {
+  if(argc < 2) {
+    std::printf("Usage: %s <Load Path> <Save Path>\n",argv[0]);
+    return -1;
+  }
   Scene myScene;
   if(!myScene.init_sdl()) {
     return mte::error_print(SDL_GetError());
