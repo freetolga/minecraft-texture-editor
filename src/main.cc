@@ -50,7 +50,6 @@ class Scene {
   ~Scene() {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
   }
 };
 
