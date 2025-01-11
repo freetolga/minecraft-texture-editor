@@ -19,10 +19,20 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #endif // defer
 
 namespace mte {
+
+enum class SDLErrors {
+  SDLWindowCreateError,
+  SDLRendererCreateError,
+  SDLSetRenderDrawColorError,
+  SDLRenderPresentError,
+  SDLRenderClearError,
+};
+
 auto error_print(const char *error) -> int {
   std::printf("Error: %s\n", error);
   return -1;
 }
+
 } // namespace mte
 class Scene {
 public:
