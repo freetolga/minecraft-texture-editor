@@ -4,76 +4,90 @@
 #include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
+#include <cstddef>
+#include <expected>
+#include <memory>
 #include <print>
-
-#ifndef defer
-struct defer_dummy {};
-template <class F> struct deferrer {
-  F f;
-  ~deferrer() { f(); }
-};
-template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
-#define DEFER_(LINE) zz_defer##LINE
-#define DEFER(LINE) DEFER_(LINE)
-#define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
-#endif // defer
+#include <string_view>
+#include <utility>
 
 namespace mte {
 
 enum class SDLErrors {
+  SDLInitError,
   SDLWindowCreateError,
   SDLRendererCreateError,
   SDLSetRenderDrawColorError,
   SDLRenderPresentError,
   SDLRenderClearError,
+  SDLSetRenderVsyncError,
 };
 
-auto error_print(const char *error) -> int {
-  std::printf("Error: %s\n", error);
+// copy pasted from
+// https://stackoverflow.com/questions/24251747/smart-pointers-with-sdl
+struct sdl_deleter {
+  void operator()(SDL_Window *p) const { SDL_DestroyWindow(p); }
+  void operator()(SDL_Renderer *p) const { SDL_DestroyRenderer(p); }
+  void operator()(SDL_Texture *p) const { SDL_DestroyTexture(p); }
+};
+
+auto error_print(std::string_view error) -> int {
+  std::println("Error {}", error);
   return -1;
 }
 
-} // namespace mte
-class Scene {
+struct SDLRendererWindow {
+private:
+  std::unique_ptr<SDL_Renderer, sdl_deleter> renderer;
+  std::unique_ptr<SDL_Window, sdl_deleter> window;
+
+
 public:
-  SDL_Color background_color;
-  SDL_Window *window;
-  SDL_Renderer *renderer;
-  uint32_t subsystems;
-
-  auto init_sdl() -> bool { return SDL_InitSubSystem(this->subsystems); }
-  auto init_scene(const char *title, int width, int height,
-                  SDL_WindowFlags window_flags) -> bool {
-    return SDL_CreateWindowAndRenderer(title, width, height, window_flags,
-                                       &window, &renderer) &&
-           SDL_SetRenderVSync(renderer, 1);
+  static auto create(const char *title, int width, int height,
+                     SDL_WindowFlags window_flags)
+      -> std::expected<SDLRendererWindow, SDLErrors> {
+    SDL_Renderer *renderer_tmp;
+    SDL_Window *window_tmp;
+    if (!SDL_CreateWindowAndRenderer(title, width, height, window_flags,
+                                     &window_tmp, &renderer_tmp)) {
+      return std::unexpected(SDLErrors::SDLRendererCreateError);
+    } else {
+      return SDLRendererWindow {
+          .renderer = std::unique_ptr<SDL_Renderer, mte::sdl_deleter>(
+              renderer_tmp, mte::sdl_deleter()),
+          .window = std::unique_ptr<SDL_Window, mte::sdl_deleter>(
+              window_tmp, mte::sdl_deleter()),
+      };
+    }
   }
-  void change_scene_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    background_color = SDL_Color{.r = r, .g = g, .b = b, .a = a};
-  }
-  auto apply_color(void) -> bool {
-    return SDL_SetRenderDrawColor(this->renderer, background_color.r,
-                                  background_color.g, background_color.b,
-                                  background_color.a);
-  }
-  auto clear_scene(void) -> bool {
-    return SDL_SetRenderDrawColor(this->renderer, 0, 0, 0, 0) &&
-           SDL_RenderClear(renderer);
-  }
-  auto present(void) -> bool { return SDL_RenderPresent(this->renderer); }
-  void destroy_scene(void) {
-    SDL_DestroyRenderer(this->renderer);
-    SDL_DestroyWindow(this->window);
-  }
-  void deinit_sdl(void) { SDL_QuitSubSystem(this->subsystems); }
-
-  Scene(uint32_t subsystems) { this->subsystems = subsystems; }
 };
 
-class rect_demo {
+struct SDLInitializer {
+private:
+  uint32_t subsystems;
+
 public:
+  ~SDLInitializer() { SDL_QuitSubSystem(this->subsystems); }
+  static auto create(uint32_t subsystems_dummy)
+      -> std::expected<SDLInitializer, SDLErrors> {
+    if (!SDL_Init(subsystems_dummy)) {
+      return std::unexpected(SDLErrors::SDLInitError);
+    } else {
+      return std::expected<SDLInitializer,SDLErrors>(SDLInitializer{
+          .subsystems = subsystems_dummy,
+      });
+    }
+  }
+};
+
+} // namespace mte
+
+struct rect_demo {
+private:
   SDL_FRect rect;
   SDL_Color color;
+
+public:
   auto set_my_color(SDL_Renderer *renderer) -> bool {
     return SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
   }
@@ -87,14 +101,15 @@ public:
 };
 
 auto main(int argc, char **argv) -> int {
+  /*
   if (argc < 2) {
     std::println("Usage: {} <Load Path> <Save Path>", argv[0]);
     return -1;
   }
-  Scene myScene(SDL_INIT_VIDEO);
-  if (!myScene.init_sdl()) {
-    return mte::error_print(SDL_GetError());
-  }
+  */
+
+  auto rendererwindow =
+      mte::SDLRendererWindowCreate("abc", 10, 10, SDL_WINDOW_RESIZABLE);
 
   defer { myScene.deinit_sdl(); };
 
@@ -109,20 +124,19 @@ auto main(int argc, char **argv) -> int {
   myScene.apply_color();
 
   rect_demo myrect(
-    SDL_FRect {
-      .x = 10.0,
-      .y = 10.0,
-      .w = 10.0,
-      .h = 10.0,
-    },
+      SDL_FRect{
+          .x = 10.0,
+          .y = 10.0,
+          .w = 10.0,
+          .h = 10.0,
+      },
 
-    SDL_Color {
-      .r = 0,
-      .g = 0,
-      .b = 255,
-      .a = 0,
-    }
-  );
+      SDL_Color{
+          .r = 0,
+          .g = 0,
+          .b = 255,
+          .a = 0,
+      });
   // game loop
   bool running = true;
   while (running) {
@@ -162,6 +176,5 @@ auto main(int argc, char **argv) -> int {
       return mte::error_print(SDL_GetError());
     }
   }
-  // cleanup
   return 0;
 }
