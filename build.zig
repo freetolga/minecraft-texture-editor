@@ -22,7 +22,15 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.linkSystemLibrary("SDL2");
+    const zigimg_dependency = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.root_module.addImport("zigimg", zigimg_dependency.module("zigimg"));
+
+    exe.linkSystemLibrary("SDL3");
+    exe.linker_enable_new_dtags = true;
     exe.linkLibC();
 
     // This declares intent for the executable to be installed into the

@@ -1,27 +1,12 @@
 const std = @import("std");
-const sdl2 = @cImport({
-    @cInclude("SDL2/SDL.h");
+const sdl3 = @cImport({
+    @cInclude("SDL3/SDL.h");
 });
 const colors = @import("colors.zig");
-const sdl_error = error{
-    SDLInitError,
-    SDLWindowCreateError,
-    SDLSurfaceCreationError,
-    SDLRendererCreationError,
-    SDLSurfaceUpdateError,
-    SDLRenderPresentError,
-    SDLRenderFillRectError,
-    SDLSetRenderDrawColorError,
-    SDLRenderClearError,
-    SDLRendererSetVSyncError,
-};
-const TEXTURE_SIZE: c_int = 16;
-const TEXTURE_ARRAY_SIZE: c_int = TEXTURE_SIZE * TEXTURE_SIZE;
-const BACKGROUND_COLOR = sdl2.SDL_Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
-const Cube = struct {
-    rect: sdl2.SDL_Rect,
-    color: sdl2.SDL_Color,
-};
+const mte_errors = @import("errors.zig");
+const Cube = @import("cube.zig").Cube;
+const config = @import("config.zig");
+const image_loader = @import("image_loader.zig");
 
 // the 9 color slots
 var color1 = colors.color1;
@@ -35,115 +20,131 @@ var color8 = colors.color8;
 var color9 = colors.color9;
 
 pub fn main() !void {
+    // resolve image paths
+    const allocator = std.heap.c_allocator;
+    var args_iter = try std.process.argsWithAllocator(allocator);
+    _ = args_iter.skip();
+    const load_path = if (args_iter.next()) |p| p else "grass_block.png";
+    const save_path = if (args_iter.next()) |p| p else "grass_block_new.png";
+    // load window
     var SCALING_FACTOR: c_int = 10;
-    var WINDOW_X: c_int = TEXTURE_SIZE * SCALING_FACTOR;
+    var WINDOW_X: c_int = config.TEXTURE_SIZE * SCALING_FACTOR;
     var WINDOW_Y: c_int = WINDOW_X;
-    const init_flags: c_uint = sdl2.SDL_INIT_EVERYTHING;
-    if (sdl2.SDL_Init(init_flags) != 0) {
-        std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-        return sdl_error.SDLInitError;
+    const init_flags: c_uint = sdl3.SDL_INIT_VIDEO;
+    if (!sdl3.SDL_Init(init_flags)) {
+        std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+        return mte_errors.sdl_error.SDLInitError;
     }
-    defer sdl2.SDL_Quit();
+    defer sdl3.SDL_QuitSubSystem(init_flags);
 
-    const window_flags = sdl2.SDL_WINDOW_SHOWN;
-    const window = sdl2.SDL_CreateWindow("Minecraft Texture Editor", sdl2.SDL_WINDOWPOS_UNDEFINED, sdl2.SDL_WINDOWPOS_UNDEFINED, WINDOW_X, WINDOW_Y, window_flags);
-    if (window == null) {
-        std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-        return sdl_error.SDLWindowCreateError;
+    const window_flags = sdl3.SDL_WINDOW_RESIZABLE;
+    var window: ?*sdl3.SDL_Window = undefined;
+    var renderer: ?*sdl3.SDL_Renderer = undefined;
+    if (!sdl3.SDL_CreateWindowAndRenderer("Minecraft Texture Editor", WINDOW_X, WINDOW_Y, window_flags, &window, &renderer) or window == null or renderer == null) {
+        std.debug.print("{s}", .{sdl3.SDL_GetError()});
+        return mte_errors.sdl_error.SDLWindowCreateError;
     }
-    defer sdl2.SDL_DestroyWindow(window);
-    sdl2.SDL_ShowWindow(window);
-    const renderer = sdl2.SDL_CreateRenderer(window, -1, sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_PRESENTVSYNC);
-    if (renderer == null) {
-        return sdl_error.SDLRendererCreationError;
+    defer sdl3.SDL_DestroyWindow(window);
+    defer sdl3.SDL_DestroyRenderer(renderer);
+    if (!sdl3.SDL_ShowWindow(window)) {
+        std.debug.print("{s}", .{sdl3.SDL_GetError()});
+        return mte_errors.sdl_error.SDLShowWindowError;
     }
-    defer sdl2.SDL_DestroyRenderer(renderer);
-    var event: sdl2.SDL_Event = undefined;
-    var quit: bool = false;
 
     // store the scene as an array of cubes
 
-    var cubes: [TEXTURE_ARRAY_SIZE]Cube = undefined;
-    for (0..TEXTURE_ARRAY_SIZE) |i| {
+    var cubes: [config.TEXTURE_ARRAY_SIZE]Cube = undefined;
+    for (0..config.TEXTURE_ARRAY_SIZE) |i| {
         cubes[i] = Cube{
-            .rect = sdl2.SDL_Rect{
-                .x = @as(c_int, @intCast(i % 16)) * SCALING_FACTOR,
+            .rect = sdl3.SDL_FRect{
+                .x = @as(f32, @floatFromInt((i % config.TEXTURE_SIZE) * @as(usize, @intCast(SCALING_FACTOR)))),
                 // increment for every TEXTURE_SIZE step of i
-                .y = @as(c_int, @intCast(@divTrunc(i, TEXTURE_SIZE))) * SCALING_FACTOR,
-                .w = SCALING_FACTOR,
-                .h = SCALING_FACTOR,
+                .y = @as(f32, @floatFromInt(@divFloor(i, config.TEXTURE_SIZE) * @as(usize, @intCast(SCALING_FACTOR)))),
+                .w = @as(f32, @floatFromInt(SCALING_FACTOR)),
+                .h = @as(f32, @floatFromInt(SCALING_FACTOR)),
             },
-            .color = BACKGROUND_COLOR,
+            .color = config.BACKGROUND_COLOR,
         };
     }
     // variables to store mouse position
-    var x: i32 = 0;
-    var y: i32 = 0;
-    var color: sdl2.SDL_Color = BACKGROUND_COLOR;
+    var x: f32 = 0;
+    var y: f32 = 0;
+    var color: sdl3.SDL_Color = config.BACKGROUND_COLOR;
 
+    var event: sdl3.SDL_Event = undefined;
+    var quit: bool = false;
     while (!quit) {
-        while (sdl2.SDL_PollEvent(&event) != 0) {
+        if (sdl3.SDL_PollEvent(&event)) {
             switch (event.type) {
-                sdl2.SDL_QUIT => {
+                sdl3.SDL_EVENT_QUIT => {
                     quit = true;
                     break;
                 },
-                sdl2.SDL_MOUSEMOTION => {
+                sdl3.SDL_EVENT_MOUSE_MOTION => {
                     x = event.motion.x;
                     y = event.motion.y;
                 },
-                sdl2.SDL_KEYDOWN => {
-                    switch (event.key.keysym.sym) {
+                sdl3.SDL_EVENT_KEY_DOWN => {
+                    switch (event.key.key) {
                         // red
-                        sdl2.SDLK_1 => {
+                        sdl3.SDLK_1 => {
                             color = color1;
                         },
                         // orange
-                        sdl2.SDLK_2 => {
+                        sdl3.SDLK_2 => {
                             color = color2;
                         },
                         // yellow
-                        sdl2.SDLK_3 => {
+                        sdl3.SDLK_3 => {
                             color = color3;
                         },
                         // green
-                        sdl2.SDLK_4 => {
+                        sdl3.SDLK_4 => {
                             color = color4;
                         },
                         // blue
-                        sdl2.SDLK_5 => {
+                        sdl3.SDLK_5 => {
                             color = color5;
                         },
                         // purple
-                        sdl2.SDLK_6 => {
+                        sdl3.SDLK_6 => {
                             color = color6;
                         },
-                        sdl2.SDLK_7 => {
+                        sdl3.SDLK_7 => {
                             color = color7;
                         },
-                        sdl2.SDLK_8 => {
+                        sdl3.SDLK_8 => {
                             color = color8;
                         },
-                        sdl2.SDLK_9 => {
+                        sdl3.SDLK_9 => {
                             color = color9;
                         },
                         // place a cube by coloring the one over the mouse cursor
-                        sdl2.SDLK_SPACE => {
-                            const idx: usize = @as(usize, @intCast(@divFloor(x, SCALING_FACTOR) + @divFloor(y, SCALING_FACTOR) * TEXTURE_SIZE));
+                        sdl3.SDLK_SPACE => {
+                            const idx: usize = @as(usize, @intCast(@divFloor(@as(usize, @intFromFloat(x)), @as(usize, @intCast(SCALING_FACTOR))) + @divFloor(@as(usize, @intFromFloat(y)), @as(usize, @intCast(SCALING_FACTOR))) * config.TEXTURE_SIZE));
                             cubes[idx].color = color;
                         },
                         // reset the scene
-                        sdl2.SDLK_r => {
-                            for (0..TEXTURE_ARRAY_SIZE) |i| {
-                                cubes[i].color = BACKGROUND_COLOR;
+                        sdl3.SDLK_R => {
+                            for (0..config.TEXTURE_ARRAY_SIZE) |i| {
+                                cubes[i].color = config.BACKGROUND_COLOR;
                             }
                         },
                         // increase screen size, not working yet!
-                        sdl2.SDLK_PLUS => {
+                        sdl3.SDLK_PLUS => {
                             SCALING_FACTOR += 1;
-                            WINDOW_X = TEXTURE_SIZE * SCALING_FACTOR;
+                            WINDOW_X = config.TEXTURE_SIZE * SCALING_FACTOR;
                             WINDOW_Y = WINDOW_X;
-                            sdl2.SDL_SetWindowSize(window, WINDOW_X, WINDOW_Y);
+                            if (!sdl3.SDL_SetWindowSize(window, WINDOW_X, WINDOW_Y)) {
+                                std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+                                return mte_errors.sdl_error.SDLWindowResizeError;
+                            }
+                        },
+                        sdl3.SDLK_L => {
+                            try image_loader.load_image_into_scene(&cubes, load_path);
+                        },
+                        sdl3.SDLK_S => {
+                            try image_loader.save_image_from_scene(&cubes, save_path);
                         },
                         else => {},
                     }
@@ -154,36 +155,36 @@ pub fn main() !void {
 
         // https://wiki.libsdl.org/SDL2/SDL_RenderPresent
         // 1) clear the back buffer
-        if (sdl2.SDL_SetRenderDrawColor(renderer, BACKGROUND_COLOR.r, BACKGROUND_COLOR.g, BACKGROUND_COLOR.b, BACKGROUND_COLOR.a) != 0) {
-            std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-            return sdl_error.SDLInitError;
-        }
-        if (sdl2.SDL_RenderClear(renderer) != 0) {
-            std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-            return sdl_error.SDLInitError;
-        }
+        try clear_scene(renderer, config.BACKGROUND_COLOR);
         // 2) fill the back buffer
         for (cubes) |cube| {
-            if (sdl2.SDL_SetRenderDrawColor(renderer, cube.color.r, cube.color.g, cube.color.b, cube.color.a) != 0) {
-                std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-                return sdl_error.SDLInitError;
+            if (!sdl3.SDL_SetRenderDrawColor(renderer, cube.color.r, cube.color.g, cube.color.b, cube.color.a)) {
+                std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+                return mte_errors.sdl_error.SDLSetRenderDrawColorError;
             }
-            if (sdl2.SDL_RenderFillRect(renderer, &cube.rect) != 0) {
-                std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-                return sdl_error.SDLInitError;
+            if (!sdl3.SDL_RenderFillRect(renderer, &cube.rect)) {
+                std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+                return mte_errors.sdl_error.SDLRenderFillRectError;
             }
         }
         // 3) call RenderPresent
-        sdl2.SDL_RenderPresent(renderer);
+        if (!sdl3.SDL_RenderPresent(renderer)) {
+            std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+            return mte_errors.sdl_error.SDLRenderPresentError;
+        }
         // 4) clear the back buffer again so that it does not flicker
-        if (sdl2.SDL_SetRenderDrawColor(renderer, BACKGROUND_COLOR.r, BACKGROUND_COLOR.g, BACKGROUND_COLOR.b, BACKGROUND_COLOR.a) != 0) {
-            std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-            return sdl_error.SDLInitError;
-        }
-        if (sdl2.SDL_RenderClear(renderer) != 0) {
-            std.debug.print("{s}\n", .{sdl2.SDL_GetError()});
-            return sdl_error.SDLInitError;
-        }
+        try clear_scene(renderer, config.BACKGROUND_COLOR);
     }
     std.debug.print("Quitting the game\n", .{});
+}
+
+fn clear_scene(renderer: ?*sdl3.SDL_Renderer, background_color: sdl3.SDL_Color) !void {
+    if (!sdl3.SDL_SetRenderDrawColor(renderer, background_color.r, background_color.g, background_color.b, background_color.a)) {
+        std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+        return mte_errors.sdl_error.SDLRenderClearError;
+    }
+    if (!sdl3.SDL_RenderClear(renderer)) {
+        std.debug.print("{s}\n", .{sdl3.SDL_GetError()});
+        return mte_errors.sdl_error.SDLRenderClearError;
+    }
 }
