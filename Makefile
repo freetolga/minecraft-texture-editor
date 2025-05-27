@@ -1,6 +1,6 @@
 #SDL2 = $(shell sdl2-config --cflags --libs)
 SDL3 = $(shell pkg-config --cflags --libs sdl3)
-CXXFLAGS := -march=native -Wall -Wextra -pedantic -Werror -Werror=implicit-fallthrough -std=c++26 -fno-exceptions -fcolor-diagnostics
+CXXFLAGS := -march=native -Wall -Wextra -pedantic -Werror -Werror=implicit-fallthrough -std=c++26 -fcolor-diagnostics
 build:
 	clang++ src/main.cc -O3 $(CXXFLAGS) -o out/main $(SDL3)
 build_debug:
