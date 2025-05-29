@@ -37,12 +37,9 @@ auto error_print(std::string_view error) -> int {
 }
 
 struct SDLRendererWindow {
-private:
+public:
   std::expected<std::unique_ptr<SDL_Renderer, sdl_deleter>,SDLErrors> renderer;
   std::expected<std::unique_ptr<SDL_Window, sdl_deleter>,SDLErrors> window;
-
-
-public:
   SDLRendererWindow(const char *title, int width, int height,
                      SDL_WindowFlags window_flags) {
     SDL_Renderer *renderer_tmp;
@@ -53,6 +50,7 @@ public:
       window =  std::unexpected(SDLErrors::SDLWindowCreateError);
     } else {
         renderer->reset(renderer_tmp);
+        window->reset(window_tmp);
     }
   }
 };
@@ -86,80 +84,8 @@ public:
 };
 
 auto main(int argc, char **argv) -> int {
-  /*
-  if (argc < 2) {
-    std::println("Usage: {} <Load Path> <Save Path>", argv[0]);
-    return -1;
-  }
-  */
-
-  auto rendererwindow =
-      mte::SDLRendererWindowCreate("abc", 10, 10, SDL_WINDOW_RESIZABLE);
-
-  defer { myScene.deinit_sdl(); };
-
-  if (!myScene.init_scene("Minecraft Texture Editor", 256, 256,
-                          SDL_WINDOW_RESIZABLE)) {
-    return mte::error_print(SDL_GetError());
-  }
-
-  defer { myScene.destroy_scene(); };
-
-  myScene.change_scene_color(0, 0, 0, 0);
-  myScene.apply_color();
-
-  rect_demo myrect(
-      SDL_FRect{
-          .x = 10.0,
-          .y = 10.0,
-          .w = 10.0,
-          .h = 10.0,
-      },
-
-      SDL_Color{
-          .r = 0,
-          .g = 0,
-          .b = 255,
-          .a = 0,
-      });
-  // game loop
-  bool running = true;
-  while (running) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-      switch (event.type) {
-      case SDL_EVENT_QUIT:
-        running = false;
-        break;
-      case SDL_EVENT_KEY_DOWN:
-        switch (event.key.key) {
-        case SDLK_UP:
-          myrect.rect.y -= 10.0;
-          break;
-        case SDLK_DOWN:
-          myrect.rect.y += 10.0;
-          break;
-        case SDLK_LEFT:
-          myrect.rect.x -= 10.0;
-          break;
-        case SDLK_RIGHT:
-          myrect.rect.x += 10.0;
-          break;
-        }
-        break;
-      }
-    }
-    // empty the back buffer
-    if (!myScene.clear_scene()) {
-      return mte::error_print(SDL_GetError());
-    }
-    // fill the back buffer
-    if (!myrect.draw_myself(myScene.renderer))
-      return mte::error_print(SDL_GetError());
-    // display the back buffer
-    if (!myScene.present()) {
-      return mte::error_print(SDL_GetError());
-    }
-  }
-  return 0;
+    auto my_state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOWPOS_CENTERED);
+    SDL_ShowWindow(my_state.window->get());
+    while(1) {}
+    return 0;
 }
