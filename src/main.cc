@@ -4,12 +4,10 @@
 #include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
-#include <cstddef>
 #include <expected>
 #include <memory>
 #include <print>
 #include <string_view>
-#include <utility>
 
 namespace mte {
 
