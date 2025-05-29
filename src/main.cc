@@ -38,46 +38,31 @@ auto error_print(std::string_view error) -> int {
 
 struct SDLRendererWindow {
 private:
-  std::unique_ptr<SDL_Renderer, sdl_deleter> renderer;
-  std::unique_ptr<SDL_Window, sdl_deleter> window;
+  std::expected<std::unique_ptr<SDL_Renderer, sdl_deleter>,SDLErrors> renderer;
+  std::expected<std::unique_ptr<SDL_Window, sdl_deleter>,SDLErrors> window;
 
 
 public:
-  static auto create(const char *title, int width, int height,
-                     SDL_WindowFlags window_flags)
-      -> std::expected<SDLRendererWindow, SDLErrors> {
+  SDLRendererWindow(const char *title, int width, int height,
+                     SDL_WindowFlags window_flags) {
     SDL_Renderer *renderer_tmp;
     SDL_Window *window_tmp;
     if (!SDL_CreateWindowAndRenderer(title, width, height, window_flags,
                                      &window_tmp, &renderer_tmp)) {
-      return std::unexpected(SDLErrors::SDLRendererCreateError);
+      renderer =  std::unexpected(SDLErrors::SDLRendererCreateError);
+      window =  std::unexpected(SDLErrors::SDLWindowCreateError);
     } else {
-      return SDLRendererWindow {
-          .renderer = std::unique_ptr<SDL_Renderer, mte::sdl_deleter>(
-              renderer_tmp, mte::sdl_deleter()),
-          .window = std::unique_ptr<SDL_Window, mte::sdl_deleter>(
-              window_tmp, mte::sdl_deleter()),
-      };
+        renderer->reset(renderer_tmp);
     }
   }
 };
 
 struct SDLInitializer {
-private:
   uint32_t subsystems;
 
 public:
-  ~SDLInitializer() { SDL_QuitSubSystem(this->subsystems); }
-  static auto create(uint32_t subsystems_dummy)
-      -> std::expected<SDLInitializer, SDLErrors> {
-    if (!SDL_Init(subsystems_dummy)) {
-      return std::unexpected(SDLErrors::SDLInitError);
-    } else {
-      return std::expected<SDLInitializer,SDLErrors>(SDLInitializer{
-          .subsystems = subsystems_dummy,
-      });
-    }
-  }
+    SDLInitializer(uint32_t subsystems_dummy) { if(SDL_Init(subsystems_dummy)) this->subsystems = subsystems_dummy; else std::abort(); }
+    ~SDLInitializer() { SDL_QuitSubSystem(this->subsystems); }
 };
 
 } // namespace mte
