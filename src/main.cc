@@ -5,7 +5,6 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 #include <expected>
-#include <iterator>
 #include <memory>
 #include <print>
 
@@ -64,9 +63,11 @@ private:
   SDL_Color color;
 
 public:
+  [[nodiscard]]
   auto set_my_color(SDL_Renderer *renderer) -> bool {
     return SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
   }
+  [[nodiscard]]
   auto draw_myself(SDL_Renderer *renderer) -> bool {
     return set_my_color(renderer) && SDL_RenderFillRect(renderer, &rect);
   }
@@ -78,9 +79,22 @@ public:
 
 auto main(int argc, char **argv) -> int {
     auto state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOW_RESIZABLE);
-    auto rect1 = rect_demo({.x = 10, .y = 10, .w = 10, .h = 10},{.r = 10, .g = 0, .b = 255, .a = 0});
-    rect1.draw_myself(state.renderer.get());
+    SDL_SetRenderVSync(state.renderer.get(), 1);
     SDL_ShowWindow(state.window.get());
-    for(SDL_Event e; e.type != SDL_EVENT_QUIT ;SDL_PollEvent(&e) ) {}
+    auto rect1 = rect_demo({.x = 10, .y = 10, .w = 10, .h = 10},{.r = 10, .g = 0, .b = 255, .a = 0});
+    for(SDL_Event e; e.type != SDL_EVENT_QUIT ;SDL_PollEvent(&e) ) {
+        if(!SDL_RenderClear(state.renderer.get())) {
+            std::printf("failed to clear renderer\n");
+            continue;
+        }
+        if(!rect1.draw_myself(state.renderer.get())) {
+            std::printf("failed to draw rect1\n");
+            continue;
+        }
+        if(!SDL_RenderPresent(state.renderer.get())) {
+            std::printf("failed to present renderer\n");
+            continue;
+        }
+    }
     return 0;
 }
