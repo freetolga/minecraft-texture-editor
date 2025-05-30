@@ -7,7 +7,6 @@
 #include <expected>
 #include <memory>
 #include <print>
-#include <string_view>
 
 namespace mte {
 
@@ -24,31 +23,26 @@ enum class SDLErrors {
 // copy pasted from
 // https://stackoverflow.com/questions/24251747/smart-pointers-with-sdl
 struct sdl_deleter {
-  void operator()(SDL_Window *p) const { SDL_DestroyWindow(p); }
-  void operator()(SDL_Renderer *p) const { SDL_DestroyRenderer(p); }
-  void operator()(SDL_Texture *p) const { SDL_DestroyTexture(p); }
+  inline void operator()(SDL_Window *p) const { SDL_DestroyWindow(p); }
+  inline void operator()(SDL_Renderer *p) const { SDL_DestroyRenderer(p); }
+  inline void operator()(SDL_Texture *p) const { SDL_DestroyTexture(p); }
 };
-
-auto error_print(std::string_view error) -> int {
-  std::println("Error {}", error);
-  return -1;
-}
 
 struct SDLRendererWindow {
 public:
-  std::expected<std::unique_ptr<SDL_Renderer, sdl_deleter>,SDLErrors> renderer;
-  std::expected<std::unique_ptr<SDL_Window, sdl_deleter>,SDLErrors> window;
+  std::unique_ptr<SDL_Renderer, sdl_deleter> renderer;
+  std::unique_ptr<SDL_Window, sdl_deleter> window;
   SDLRendererWindow(const char *title, int width, int height,
                      SDL_WindowFlags window_flags) {
     SDL_Renderer *renderer_tmp;
     SDL_Window *window_tmp;
     if (!SDL_CreateWindowAndRenderer(title, width, height, window_flags,
                                      &window_tmp, &renderer_tmp)) {
-      renderer =  std::unexpected(SDLErrors::SDLRendererCreateError);
-      window =  std::unexpected(SDLErrors::SDLWindowCreateError);
+        std::println("Failed to initialize SDL! {}", SDL_GetError());
+        std::terminate();
     } else {
-        renderer->reset(renderer_tmp);
-        window->reset(window_tmp);
+        renderer.reset(renderer_tmp);
+        window.reset(window_tmp);
     }
   }
 };
@@ -83,7 +77,7 @@ public:
 
 auto main(int argc, char **argv) -> int {
     auto my_state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOWPOS_CENTERED);
-    SDL_ShowWindow(my_state.window->get());
+    SDL_ShowWindow(my_state.window.get());
     while(1) {}
     return 0;
 }
