@@ -4,13 +4,19 @@
 #include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <print>
+#include <string_view>
+
+constexpr int window_width = 800;
+constexpr int window_height = 800;
+constexpr std::string_view window_title("test");
 
 namespace mte {
 
-enum class SDLErrors {
+enum class SDLErrors: std::uint8_t {
   SDLInitError,
   SDLWindowCreateError,
   SDLRendererCreateError,
@@ -23,20 +29,20 @@ enum class SDLErrors {
 // copy pasted from
 // https://stackoverflow.com/questions/24251747/smart-pointers-with-sdl
 struct sdl_deleter {
-  inline void operator()(SDL_Window *p) const { SDL_DestroyWindow(p); }
-  inline void operator()(SDL_Renderer *p) const { SDL_DestroyRenderer(p); }
-  inline void operator()(SDL_Texture *p) const { SDL_DestroyTexture(p); }
+  void operator()(SDL_Window *window) const { SDL_DestroyWindow(window); }
+  void operator()(SDL_Renderer *renderer) const { SDL_DestroyRenderer(renderer); }
+  void operator()(SDL_Texture *texture) const { SDL_DestroyTexture(texture); }
 };
 
 struct SDLRendererWindow {
 public:
   std::unique_ptr<SDL_Renderer, sdl_deleter> renderer;
   std::unique_ptr<SDL_Window, sdl_deleter> window;
-  SDLRendererWindow(const char *title, int width, int height,
+  SDLRendererWindow(const std::string_view title, int width, int height,
                      SDL_WindowFlags window_flags) {
-    SDL_Renderer *renderer_tmp;
-    SDL_Window *window_tmp;
-    if (!SDL_CreateWindowAndRenderer(title, width, height, window_flags,
+    SDL_Renderer *renderer_tmp = nullptr;
+    SDL_Window *window_tmp = nullptr;
+    if (!SDL_CreateWindowAndRenderer(title.data(), width, height, window_flags,
                                      &window_tmp, &renderer_tmp)) {
         std::println("Failed to initialize SDL! {}", SDL_GetError());
         std::terminate();
@@ -64,21 +70,18 @@ private:
 
 public:
   [[nodiscard]]
-  auto set_my_color(SDL_Renderer *renderer) -> bool {
+  auto set_my_color(SDL_Renderer *renderer) const -> bool{
     return SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
   }
   [[nodiscard]]
-  auto draw_myself(SDL_Renderer *renderer) -> bool {
+  auto draw_myself(SDL_Renderer *renderer) const -> bool{
     return set_my_color(renderer) && SDL_RenderFillRect(renderer, &rect);
   }
-  rect_demo(SDL_FRect rect, SDL_Color color) {
-    this->rect = rect;
-    this->color = color;
-  }
+  rect_demo(SDL_FRect rect, SDL_Color color) : rect(rect), color(color){}
 };
 
 auto main(int argc, char **argv) -> int {
-    auto state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOW_RESIZABLE);
+    auto state = mte::SDLRendererWindow(window_title, window_width, window_height, SDL_WINDOW_RESIZABLE);
     SDL_SetRenderVSync(state.renderer.get(), 1);
     SDL_ShowWindow(state.window.get());
     auto rect1 = rect_demo({.x = 10, .y = 10, .w = 10, .h = 10},{.r = 10, .g = 0, .b = 255, .a = 0});
