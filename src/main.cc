@@ -5,6 +5,7 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 #include <expected>
+#include <iterator>
 #include <memory>
 #include <print>
 
@@ -51,7 +52,7 @@ struct SDLInitializer {
   uint32_t subsystems;
 
 public:
-    SDLInitializer(uint32_t subsystems_dummy) { if(SDL_Init(subsystems_dummy)) this->subsystems = subsystems_dummy; else std::abort(); }
+    explicit SDLInitializer(uint32_t subsystems_dummy) { if(SDL_Init(subsystems_dummy)) this->subsystems = subsystems_dummy; else std::abort(); }
     ~SDLInitializer() { SDL_QuitSubSystem(this->subsystems); }
 };
 
@@ -76,8 +77,10 @@ public:
 };
 
 auto main(int argc, char **argv) -> int {
-    auto my_state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOWPOS_CENTERED);
-    SDL_ShowWindow(my_state.window.get());
-    while(1) {}
+    auto state = mte::SDLRendererWindow("test", 600, 600, SDL_WINDOW_RESIZABLE);
+    auto rect1 = rect_demo({.x = 10, .y = 10, .w = 10, .h = 10},{.r = 10, .g = 0, .b = 255, .a = 0});
+    rect1.draw_myself(state.renderer.get());
+    SDL_ShowWindow(state.window.get());
+    for(SDL_Event e; e.type != SDL_EVENT_QUIT ;SDL_PollEvent(&e) ) {}
     return 0;
 }
