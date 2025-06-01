@@ -9,6 +9,7 @@
 #include <memory>
 #include <print>
 #include <string_view>
+#include "colors.cc"
 
 constexpr int window_width = 800;
 constexpr int window_height = 800;
@@ -86,6 +87,10 @@ auto main(int argc, char **argv) -> int {
     SDL_ShowWindow(state.window.get());
     auto rect1 = rect_demo({.x = 10, .y = 10, .w = 10, .h = 10},{.r = 10, .g = 0, .b = 255, .a = 0});
     for(SDL_Event e; e.type != SDL_EVENT_QUIT ;SDL_PollEvent(&e) ) {
+        if(!SDL_SetRenderDrawColor(state.renderer.get(), 0, 0,0,0)) {
+            std::printf("failed to clear renderer\n");
+            continue;
+        }
         if(!SDL_RenderClear(state.renderer.get())) {
             std::printf("failed to clear renderer\n");
             continue;
