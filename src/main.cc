@@ -10,7 +10,7 @@
 #include <memory>
 #include <print>
 #include <string_view>
-#include "colors.cc"
+#include "colors.h"
 
 constexpr int window_width = 800;
 constexpr int window_height = 800;
