@@ -10,6 +10,7 @@
 #include <memory>
 #include <print>
 #include <string_view>
+#include <vector>
 #include "colors.h"
 
 constexpr int window_width = 800;
@@ -40,18 +41,11 @@ struct SDLRendererWindow {
 private:
   std::unique_ptr<SDL_Renderer, sdl_deleter> renderer;
   std::unique_ptr<SDL_Window, sdl_deleter> window;
-  SDLRendererWindow(const std::string_view title, int width, int height,
-                     SDL_WindowFlags window_flags) {
-    SDL_Renderer *renderer_tmp = nullptr;
-    SDL_Window *window_tmp = nullptr;
-    if (!SDL_CreateWindowAndRenderer(title.data(), width, height, window_flags,
-                                     &window_tmp, &renderer_tmp)) {
-        std::println("Failed to initialize SDL! {}", SDL_GetError());
-        std::terminate();
-    } else {
+  SDLRendererWindow(SDL_Renderer * renderer_tmp, SDL_Window * window_tmp) {
         renderer.reset(renderer_tmp);
         window.reset(window_tmp);
-    }
+        SDL_SetRenderVSync(renderer_tmp, 1);
+        SDL_ShowWindow(window_tmp);
   }
 public:
   static std::expected<SDLRendererWindow,SDLErrors> create(const std::string_view title, int width, int height, SDL_WindowFlags window_flags) {
@@ -61,9 +55,17 @@ public:
                                      &window_tmp, &renderer_tmp)) {
         return std::unexpected(SDLErrors::SDLRendererCreateError);
     } else {
-        return SDLRendererWindow(title,width,height,window_flags);
+        return SDLRendererWindow(renderer_tmp,window_tmp);
     }
   }
+
+  std::unique_ptr<SDL_Renderer,sdl_deleter> getRenderer() {
+      return std::move(renderer);
+  }
+  std::unique_ptr<SDL_Window,sdl_deleter> getWindow() {
+      return std::move(window);
+  }
+
 };
 
 struct SDLInitializer {
@@ -95,28 +97,34 @@ public:
 
 auto main(int argc, char **argv) -> int {
     auto state = mte::SDLRendererWindow::create(window_title, window_width, window_height, SDL_WINDOW_RESIZABLE);
-    SDL_SetRenderVSync(state.renderer.get(), 1);
-    SDL_ShowWindow(state.window.get());
-    std::array<rect_demo, (int) (window_width * window_height / 100)> rect_vector = {};
-    for(int idx = 0; idx < (window_width / 10) * (window_height / 10); ++idx) {
-        rect_vector[idx] = (rect_demo({.x = (float)(10 * idx), .y = (float)(std::max(10*idx, idx)), .w = 10, .h = 10}, {.r = 0, .g = 0,.b=0,.a=0}));
+    if(!state.has_value()) {
+        std::printf("Failed to initialize renderer or window: %s\n", SDL_GetError());
+        std::terminate();
     }
+    auto renderer = state->getRenderer();
+    auto window = state->getWindow();
+    // render some squares
+    std::vector<rect_demo> rect_vector{};
+    for(int idx = 0; idx < (window_width / 10) * (window_height / 10); ++idx) {
+        rect_vector.push_back(rect_demo({.x = (float)(10 * idx), .y = (float)(std::max(10*idx, idx)), .w = 10, .h = 10}, {.r = 10, .g = 0,.b=0,.a=0}));
+    }
+
     for(SDL_Event e; e.type != SDL_EVENT_QUIT ;SDL_PollEvent(&e) ) {
-        if(!SDL_SetRenderDrawColor(state.renderer.get(), 0, 0,0,0)) {
+        if(!SDL_SetRenderDrawColor(renderer.get(), 0, 0,0,0)) {
             std::printf("failed to clear renderer\n");
             continue;
         }
-        if(!SDL_RenderClear(state.renderer.get())) {
+        if(!SDL_RenderClear(renderer.get())) {
             std::printf("failed to clear renderer\n");
             continue;
         }
         for(auto &target_rect: rect_vector) {
-            if(!target_rect->draw_myself(state.renderer.get())) {
-                std::printf("failed to draw rect1\n");
+            if(!target_rect.draw_myself(renderer.get())) {
+                std::printf("failed to draw rect\n");
                 continue;
             }
         }
-        if(!SDL_RenderPresent(state.renderer.get())) {
+        if(!SDL_RenderPresent(renderer.get())) {
             std::printf("failed to present renderer\n");
             continue;
         }
